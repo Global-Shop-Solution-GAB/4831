@@ -1,0 +1,580 @@
+Program.Sub.ScreenSU.Start
+Gui.FormInv..Create
+Gui.FormInv..Caption("Qty Req")
+Gui.FormInv..Size(3885,2940)
+Gui.FormInv..MinX(0)
+Gui.FormInv..MinY(0)
+Gui.FormInv..Position(0,0)
+Gui.FormInv..BackColor(-2147483633)
+Gui.FormInv..MousePointer(0)
+Gui.FormInv..Event(UnLoad,Unload)
+Gui.FormInv.chkFAI.Create(CheckBox)
+Gui.FormInv.chkFAI.Size(1005,360)
+Gui.FormInv.chkFAI.Position(210,300)
+Gui.FormInv.chkFAI.Caption("FAI/DTR")
+Gui.FormInv.chkFAI.Event(Click,DirtyFlag)
+Gui.FormInv.chkPPAP.Create(CheckBox)
+Gui.FormInv.chkPPAP.Size(810,360)
+Gui.FormInv.chkPPAP.Position(1545,300)
+Gui.FormInv.chkPPAP.Caption("PPAP")
+Gui.FormInv.chkPPAP.Event(Click,DirtyFlag)
+Gui.FormInv.chkMisc.Create(CheckBox)
+Gui.FormInv.chkMisc.Size(810,360)
+Gui.FormInv.chkMisc.Position(2655,300)
+Gui.FormInv.chkMisc.Caption("Misc.")
+Gui.FormInv.chkMisc.Event(Click,DirtyFlag)
+Gui.FormInv.lblMiscReason.Create(Label,"Misc. Reason",True,1935,255,0,180,945,True,0,"Arial",8,-2147483633,0)
+Gui.FormInv.txtMiscReason.Create(TextBox,"",True,3195,300,0,225,1170,True,0,"Arial",8,-2147483643,1)
+Gui.FormInv.cmdSave.Create(Button)
+Gui.FormInv.cmdSave.Size(855,375)
+Gui.FormInv.cmdSave.Position(225,1725)
+Gui.FormInv.cmdSave.Caption("Save")
+Gui.FormInv.cmdSave.Event(Click,cmdSave_Click)
+Gui.FormCMI..Create
+Gui.FormCMI..Caption("Parts Flagged/On Hold")
+Gui.FormCMI..Size(20445,9270)
+Gui.FormCMI..MinX(0)
+Gui.FormCMI..MinY(0)
+Gui.FormCMI..Position(0,0)
+Gui.FormCMI..BackColor(-2147483633)
+Gui.FormCMI..MousePointer(0)
+Gui.FormCMI..Event(UnLoad,Unload)
+Gui.FormCMI.GsGcParts.Create(GsGridControl)
+Gui.FormCMI.GsGcParts.Size(19680,7275)
+Gui.FormCMI.GsGcParts.Position(255,1200)
+Gui.FormCMI.GsGcParts.Event(CellValueChanged,GsGcParts_CellValueChanged)
+Gui.FormCMI.GsGcParts.Anchor(15)
+Gui.FormCMI.picGSSLogo.Create(PictureBox)
+Gui.FormCMI.picGSSLogo.Size(4125,960)
+Gui.FormCMI.picGSSLogo.Position(7470,45)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+v.Global.iDirty.Declare(Long)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+'Coded by: WAW
+'Date: 12/28/17
+'Custom shipping hold and wo generation program for qualified parts
+'This program will run from the inventory parts, New/Open
+v.Local.sIcon.Declare
+v.Local.sGssLogo.Declare
+'open the connection
+F.Intrinsic.String.Build("{0}\GAB\GAS\gss2.ico",v.Caller.PluginsDir,v.Local.sIcon)
+F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+F.Intrinsic.Control.SelectCase(v.Caller.Hook)
+	F.Intrinsic.Control.Case(10120)
+		'check to see if we are running from inventory
+		'set the script 3 button to say  Flags
+		v.Passed.000070.Set("Qlty Req")
+	F.Intrinsic.Control.Case(10230)
+		'script 3 button
+		gui.FormInv..Icon(v.Local.sIcon)
+		f.Intrinsic.Control.CallSub(inventory)
+	F.Intrinsic.Control.Case(28530)
+		'else if the pre-save is called from shipments
+		f.Intrinsic.Control.CallSub(Shipments)
+	F.Intrinsic.Control.Case(16661)
+		'if wo save is selected	
+		f.Intrinsic.Control.CallSub(WOPartCheck)
+	F.Intrinsic.Control.Case(16650)
+		'Pre OK on the  Work Order Header Screen
+		f.Intrinsic.Control.CallSub(WOPartCheck)
+	F.Intrinsic.Control.CaseElse
+		'custom menu item
+		F.Intrinsic.String.Build("{0}\GAB\GAS\GAB_GSS_Logo_Green_Dash.png",v.Caller.PluginsDir,v.Local.sGssLogo)
+		Gui.FormCMI..Icon(v.Local.sIcon)
+		Gui.FormCMI.picGSSLogo.Picture(v.Local.sGssLogo)
+		f.Intrinsic.Control.CallSub(CMI)
+F.Intrinsic.Control.EndSelect
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4831_HoldParts.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub(unload)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Main.End
+
+Program.Sub.Unload.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+
+gui.FormInv..Visible(false)
+
+F.ODBC.Connection!conx.Close
+F.Intrinsic.Control.End 
+	
+F.Intrinsic.Control.Label("Unload_Err")	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: GCG_4831_HoldParts.g2u{0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}.",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.Unload.End
+
+Program.Sub.inventory.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+v.Local.ssql.Declare
+v.Local.bval.declare
+v.Local.sret.declare
+'query for the part
+F.Intrinsic.String.Build("Select REQ, Req_Desc from GCG_4831_PartWF where PART = '{0}' and REV = '{1}' and LOC = '{2}'",v.Passed.000007,V.passed.000008,V.passed.000009,V.Local.ssql)
+F.ODBC.Connection!conx.executeandreturn(v.Local.ssql,v.Local.sret)
+
+'check each value
+'FAI
+f.Intrinsic.string.IsInString(v.Local.sret,"FAI/DTR",True,v.Local.bval)
+f.Intrinsic.Control.If(v.Local.bval,=,True)
+	v.Global.iDirty.Set(v.Global.iDirty.--)
+	gui.FormInv.chkFAI.Value(1)
+f.Intrinsic.Control.EndIf
+
+'PPAP
+f.Intrinsic.string.IsInString(v.Local.sret,"PPAP",True,v.Local.bval)
+f.Intrinsic.Control.If(v.Local.bval,=,True)
+	v.Global.iDirty.Set(v.Global.iDirty.--)
+	gui.FormInv.chkPPAP.Value(1)
+f.Intrinsic.Control.EndIf
+
+'Misc
+f.Intrinsic.string.IsInString(v.Local.sret,"Misc",True,v.Local.bval)
+f.Intrinsic.Control.If(v.Local.bval,=,True)
+	v.Global.iDirty.Set(v.Global.iDirty.--)
+	F.Intrinsic.String.Split(v.Local.sret, "*!*", v.Local.sret)
+	gui.FormInv.chkMisc.Value(1)
+	Gui.FormInv.txtMiscReason.Text(v.Local.sret(1).trim)
+f.Intrinsic.Control.EndIf
+'display form
+gui.FormInv..Visible(true)
+
+F.Intrinsic.Control.Label("Unload_Err")	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: GCG_4831_HoldParts.g2u{0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}.",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+
+Program.Sub.inventory.End
+
+Program.Sub.CMI.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+v.Local.ssql.Declare(String)
+v.Local.i.Declare(long)
+v.Local.spart.Declare(string)
+v.Local.bgroup.Declare
+
+f.data.DataTable.CreateFromSQL("dtParts","conx","Select ECN_NUMBER, PART, REV, LOC, PART_DESC, REQ, RTRIM(REQ_DESC) as REQ_DESC, RTRIM(DATE_TIME) as DATE_TIME, RTRIM(THEUSER) as THEUSER, if(WO_HOLD <> '1', Cast(0 as bit) , Cast(1 as bit)) as WO_HOLD, RTRIM(DATE_TIME2) as DATE_TIME2, RTRIM(THEUSER2) as THEUSER2, if(SHIPPING_HOLD <> '1', Cast(0 as bit), cast(1 as bit)) as SHIPPING_HOLD from GCG_4831_PartWF",True)
+
+'add 2 columns
+f.Data.DataTable.AddColumn("dtParts","PRL","String")
+
+f.Intrinsic.Control.For(v.Local.i,0,v.DataTable.dtParts.rowcount--,1)
+	f.Intrinsic.String.GSSPartString(v.DataTable.dtParts(v.local.i).PART.fieldvaltrim,v.DataTable.dtParts(v.local.i).REV.fieldvaltrim,v.Local.spart)
+	f.Intrinsic.String.Build("'{0}''{1}'",v.Local.spart,v.DataTable.dtParts(v.local.i).LOC.fieldvaltrim,v.Local.spart)
+	f.Data.DataTable.SetValue("dtParts",v.Local.i,"PRL",v.Local.spart)
+f.Intrinsic.Control.Next(v.Local.i)
+
+'create the dataview
+f.Data.DataView.Create("DTParts","DVParts")
+
+'set gv properties
+Gui.FormCMI.GsGcParts.AddGridviewFromDataview("GVParts","DTParts","DVParts")
+Gui.FormCMI.GsGcParts.SetGridViewProperty("GVParts","MultiSelect",True)
+Gui.FormCMI.GsGcParts.setGridViewProperty("GVParts","AllowSort",True)
+Gui.FormCMI.GsGcParts.setGridViewProperty("GVParts","AllowFilter",True)
+Gui.FormCMI.GsGcParts.setGridViewProperty("GVParts","OptionsDetailShowDetailTabs",False)
+Gui.FormCMI.GsGcParts.setGridViewProperty("GVParts","OptionsViewShowGroupPanel",True)
+Gui.FormCMI.GsGcParts.SetGridViewProperty("GVParts","EnableAppearanceOddRow",True)
+Gui.FormCMI.GsGcParts.SetGridviewProperty("GVParts","Editable",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","PRL","Visible",False)
+
+'allign headers
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","ECN_NUMBER","headerHAlignment","Center")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","PART","headerHAlignment","Center")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","REV","headerHAlignment","Center")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","LOC","headerHAlignment","Center")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","PART_DESC","headerHAlignment","Center")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","REQ","headerHAlignment","Center")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","REQ_DESC","headerHAlignment","Center")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","SHIPPING_HOLD","headerHAlignment","Center")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","WO_HOLD","headerHAlignment","Center")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","DATE_TIME","headerHAlignment","Center")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","THEUSER","headerHAlignment","Center")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","THEUSER2","headerHAlignment","Center")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","DATE_TIME2","headerHAlignment","Center")
+
+'captions
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","ECN_NUMBER","Caption","Number")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","PART","Caption","Part")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","REV","Caption","Rev")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","LOC","Caption","Loc")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","PART_DESC","Caption","Description")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","REQ","Caption","Flag Type")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","REQ_DESC","Caption","Misc Description")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","SHIPPING_HOLD","Caption","Ship Hold")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","WO_HOLD","Caption","WO Hold")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","DATE_TIME","Caption","WO Date/Time")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","THEUSER","Caption","WO By")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","THEUSER2","Caption","Ship By")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","DATE_TIME2","Caption","Ship Date/Time")
+
+'bold headers
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","ECN_NUMBER","HeaderFontBold",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","PART","HeaderFontBold",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","REV","HeaderFontBold",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","LOC","HeaderFontBold",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","PART_DESC","HeaderFontBold",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","REQ","HeaderFontBold",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","REQ_DESC","HeaderFontBold",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","SHIPPING_HOLD","HeaderFontBold",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","WO_HOLD","HeaderFontBold",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","DATE_TIME","HeaderFontBold",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","THEUSER","HeaderFontBold",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","THEUSER2","HeaderFontBold",True)
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","DATE_TIME2","HeaderFontBold",True)
+
+'set the widths
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","ECN_NUMBER","Width","45")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","PART","Width","125")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","REV","Width","45")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","LOC","Width","25")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","PART_DESC","Width","150")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","REQ","Width","100")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","REQ_DESC","Width","125")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","SHIPPING_HOLD","Width","55")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","WO_HOLD","Width","55")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","DATE_TIME","Width","100")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","THEUSER","Width","55")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","THEUSER2","Width","55")
+Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","DATE_TIME2","Width","100")
+
+	'check the users security groups
+	f.Global.Security.IsInGroup(v.Caller.User,"FAISHIP",v.Local.bgroup)	
+	
+	f.Intrinsic.Control.If(v.Local.bgroup,=,True)
+		'edits
+		Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","SHIPPING_HOLD","ReadOnly","False")
+		Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","SHIPPING_HOLD","AllowEdit","True")
+	f.Intrinsic.Control.EndIf
+	
+	'check the users security groups
+	f.Global.Security.IsInGroup(v.Caller.User,"FAIWO",v.Local.bgroup)	
+	
+	f.Intrinsic.Control.If(v.Local.bgroup,=,True)
+		Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","WO_HOLD","ReadOnly","False")
+		Gui.FormCMI.GsGcParts.SetColumnProperty("GVParts","WO_HOLD","AllowEdit","True")
+	f.Intrinsic.Control.EndIf
+
+gui.FormCMI.GsGcParts.MainView("GVParts")
+
+'make the FormCMI visible
+gui.FormCMI..Visible(true)
+
+F.Intrinsic.Control.Label("CMI_Err")	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: GCG_4831_HoldParts.g2u{0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}.",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.CMI.End
+
+Program.Sub.cmdSave_Click.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+V.Local.ssql.Declare(String)
+v.Local.stype.Declare(String)
+v.local.snum.Declare(String)
+v.Local.secnsql.Declare(String)
+v.Local.fecn.Declare(float)
+'check to see if misc checkbox was checked, if so make sure they put a reason
+f.Intrinsic.Control.If(v.Screen.FormInv!chkMisc.Value,=,1)
+f.Intrinsic.Control.AndIf(v.Screen.FormInv!txtMiscReason.text,=,"")
+	F.Intrinsic.UI.Msgbox("Please enter a reason for Misc.")
+	f.Intrinsic.Control.ExitSub
+f.Intrinsic.Control.Else
+	f.Intrinsic.Control.If(v.Screen.FormInv!chkMisc.Value,=,1)
+		v.Local.stype.Set("Misc")
+f.Intrinsic.control.EndIf
+F.Intrinsic.Control.EndIf	
+f.Intrinsic.Control.If(v.Screen.FormInv!chkFAI.Value,=,1)
+	f.Intrinsic.Control.If(v.Local.stype,<>,"")
+		f.Intrinsic.String.build("{0}, {1}",v.Local.stype,"FAI/DTR",v.Local.stype)
+	f.Intrinsic.Control.Else
+		v.Local.stype.Set("FAI/DTR")
+	f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.If(v.Screen.FormInv!chkPPAP.Value,=,1)
+	f.Intrinsic.Control.If(v.Local.stype,<>,"")
+		f.Intrinsic.String.build("{0}, {1}",v.Local.stype,"PPAP",v.Local.stype)	
+	f.Intrinsic.Control.Else
+		v.Local.stype.Set("PPAP")
+	f.Intrinsic.Control.EndIf	
+f.Intrinsic.Control.EndIf
+	'check to see if there is already data for that part in the cusotm table, if so update it. Otherwise add it to the table
+	F.Intrinsic.String.Build("Select * from GCG_4831_PartWF where PART = '{0}' and REV = '{1}' and LOC = '{2}'",v.Passed.000007,V.passed.000008,V.passed.000009,V.Local.ssql)
+	F.ODBC.Connection!conx.openrecordsetrw("rst",V.Local.ssql)
+	F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,True)
+		F.ODBC.conx!rst.AddNew
+		v.Local.secnsql.set("Select MAX(ECN_NUMBER) as ECN from GCG_4831_PartWF")
+		f.ODBC.Connection!conx.executeandreturn(v.Local.secnsql,v.Local.fecn)
+		f.Intrinsic.Math.Add(v.Local.fecn,1,v.Local.snum)
+		F.ODBC.conx!rst.Set!ECN_NUMBER(v.local.snum)		
+		F.ODBC.conx!rst.Set!PART(v.Passed.000007.Trim)
+		F.ODBC.conx!rst.Set!REV(V.passed.000008.Trim)
+		F.ODBC.conx!rst.Set!LOC(V.passed.000009.Trim)	
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conx!rst.Set!REQ(V.local.stype.trim)
+	F.ODBC.conx!rst.Set!REQ_DESC(V.screen.FormInv!txtMiscReason.text)		
+	F.ODBC.conx!rst.Set!PART_DESC(v.Passed.000012.Trim)
+	F.Intrinsic.Control.If(v.Global.iDirty, >=, 1)
+		F.ODBC.conx!rst.Set!WO_HOLD("1")	
+		F.ODBC.conx!rst.Set!SHIPPING_HOLD("1")	
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conx!rst.Update
+F.Intrinsic.Control.If(v.Global.iDirty, >=, 1)
+	F.Intrinsic.Control.CallSub(Email)
+F.Intrinsic.Control.EndIf
+'end the program
+f.Intrinsic.Control.CallSub(Unload)
+
+F.Intrinsic.Control.Label("cmdSave_Err")	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: GCG_4831_HoldParts.g2u{0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}.",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.cmdSave_Click.End
+
+Program.Sub.Email.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+V.Local.ssql.Declare(String)
+v.Local.sret.declare
+v.Local.i.declare
+v.Local.sbody.Declare
+v.Local.ssubject.Declare
+v.Local.sECN.declare
+v.Local.fecn.declare
+v.Local.spart.declare
+v.Local.iuserid.declare
+v.Local.susername.declare
+v.Local.semail.declare
+v.Local.secnsql.Declare(string)
+v.Local.ssenderemail.declare
+'send an email to the users in the email security group
+F.Intrinsic.String.Build("Select REQ from GCG_4831_PartWF Where Part = '{0}' and Rev = '{1}' and Loc = '{2}'", v.Passed.000007.Trim, v.Passed.000008.Trim, v.Passed.000009.Trim, v.Local.secnsql)
+F.ODBC.Connection!conx.executeandreturn(v.Local.secnsql,v.Local.secn)
+'put the part together
+f.Intrinsic.String.GSSPartString(v.Passed.000007,v.Passed.000008,v.Local.spart)
+'set the subject
+v.Local.ssubject.Set("A New Quality Requirement Has Been Created")
+f.Intrinsic.String.Build("{0} quality requirements have been created for Part: {1}{2}Loc:  {3}{2}Part Description:  {4}.",v.Local.secn.Trim,v.Local.spart.Trim, v.Ambient.Tab, v.Passed.000009.Trim, v.Passed.000012.Trim,v.Local.sbody)
+'get the user ID
+f.Global.Security.getuserid(v.Caller.User,v.Caller.CompanyCode,v.Local.iuserid)
+f.Global.Security.GetFullName(v.Caller.CompanyCode,v.Local.susername)
+f.Global.Security.getuseremail(v.caller.user,v.local.ssenderemail)
+f.Intrinsic.String.Build("{1}*!*{0}",v.Local.susername.trim,v.Local.ssenderemail.trim,v.local.semail)
+
+'get the users from the security group
+Function.Global.Security.GetGroupEmails("FAIEMAIL",v.Local.sret) 
+'check to see if users were found
+f.Intrinsic.Control.If(v.Local.semail.ret,<>,"")
+	f.Intrinsic.String.Split(v.Local.sret,"*!*",v.Local.sret)
+	f.Intrinsic.Control.For(v.Local.i,0,v.Local.sret.UBound,1)
+		'send an email to the employee
+		f.Global.Messaging.queuemessage(v.Caller.CompanyCode,v.Local.iuserid.Trim,"",v.Local.ssubject,v.local.semail.Trim,v.local.sret(v.Local.i),v.local.sbody)
+	f.Intrinsic.Control.Next(v.Local.i)
+f.Intrinsic.Control.EndIf
+'end the program
+f.Intrinsic.Control.CallSub(unload)
+F.Intrinsic.Control.Label("cmdSave_Err")	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: GCG_4831_HoldParts.g2u{0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}.",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.Email.End
+
+Program.Sub.Shipments.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+v.Local.sflag.declare
+v.Local.ssql.declare
+v.Local.spart.declare
+v.Local.i.declare
+v.Local.smsg.declare
+v.Local.spartbuild.declare
+v.Local.irowcnt.declare
+v.Local.sreadrow.declare
+
+
+'pad the shipment order number and suffix
+'v.Local.sship.Set(v.Passed.000150)
+'f.Intrinsic.String.LPad(v.Local.sship,"0",7,v.Local.sship)
+'v.Local.sseq.Set(v.Passed.000151)
+'f.Intrinsic.String.LPad(v.Local.sseq,"0",4,v.Local.sseq)
+
+'Loads name of BDF and ID into memory
+F.Intrinsic.BDF.Load("AUX001","AUX001")
+'Copies structure of BDF and given the name "Clone"
+F.Intrinsic.BDF.Clone("AUX001","Clone")
+'Returns the number of rows of BDF and returns it to iRowCnt
+F.Intrinsic.BDF.ReadRowCount("AUX001",V.Local.iRowCnt)
+'Subtract 1 row to count rows starting from row 0 instead of counting from row 1 (ex: 0, 1, 2, 3 not (1,2,3))
+F.Intrinsic.Math.Sub(V.Local.iRowCnt,1,V.Local.iRowCnt)
+'Starting from 0 and looping through each row, 1 row at a time.
+F.Intrinsic.Control.For(V.Local.i,0,V.Local.iRowCnt,1)
+	'Reads data from AUX002
+	F.Intrinsic.BDF.ReadRow("AUX001",V.Local.i,V.Local.sReadRow)
+	'String delimiter(|~|) splits row from a string into array
+	F.Intrinsic.String.Split(V.Local.sReadRow,"|~|",V.Local.sReadRow)
+
+	'query for the parts on the shipment and see if they are the parts flagged to not be shipped from the dashboard
+	f.Intrinsic.String.Build("Select SHIPPING_HOLD from GCG_4831_PartWF where (PART+REV) = '{0}' and LOC = '{1}'",v.Local.sreadrow(8),v.Local.sreadrow(10),v.Local.ssql)
+	F.ODBC.Connection!conx.Executeandreturn(V.Local.sSql,v.Local.sflag)
+
+	'checks to see if the part is on shipping hold and 'Ship All Lines is checked
+	f.Intrinsic.Control.If(v.Local.sflag,=,1,"AND", V.Passed.000126,=,"Y")
+		'checks to see if the shipped qty is greater than 0 or spaces. If it is, it'll stop the shipment from proceeding. If not, the shipment can be saved
+		F.Intrinsic.Control.If(V.Local.sreadrow(3),>,0)   
+			f.Intrinsic.String.Build("Part: {0} is on shipping hold.{1}Contact Quality.{1}If you would like to proceed with shipping the other parts, please switch to a Partial Shipment.",v.Local.sreadrow(8).trim, v.Ambient.NewLine,v.Local.smsg)
+			F.Intrinsic.UI.Msgbox(V.Local.smsg)
+			v.Passed.777777.Set(1)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.ElseIf(V.Local.sflag,=,1,"AND",V.Passed.000109,=,"Complete Shipment")
+		F.Intrinsic.Control.If(V.Local.sreadrow(3),>,0)   
+			f.Intrinsic.String.Build("Part: {0} is on shipping hold.{1}Contact Quality.{1}If you would like to proceed with shipping the other parts, please switch to a Partial Shipment.",v.Local.sreadrow(8).trim, v.Ambient.NewLine,v.Local.smsg)
+			F.Intrinsic.UI.Msgbox(V.Local.smsg)
+			v.Passed.777777.Set(1)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.ElseIf(V.Local.sflag,=,1,"AND",V.Passed.000109,=,"Partial Shipment")	
+		F.Intrinsic.Control.If(V.Local.sreadrow(3),>,0)											   
+			f.Intrinsic.String.Build("Part: {0} is on shipping hold.{1}Contact Quality",v.Local.sreadrow(8).trim, v.Ambient.NewLine,v.Local.smsg)
+			F.Intrinsic.UI.Msgbox(V.Local.smsg)
+			v.Passed.777777.Set(1)
+		F.Intrinsic.Control.EndIf
+	f.Intrinsic.Control.EndIf
+	
+'Loops thru all records until no records exist
+F.Intrinsic.Control.Next(V.Local.i)	
+
+
+''check to see if the part is not blank
+'f.Intrinsic.Control.If(v.Local.spart.Trim,<>,"")
+'	f.Intrinsic.String.Split(v.Local.spart,"*!*",v.Local.spart)
+'	f.Intrinsic.Control.For(v.Local.i,0,v.Local.spart.UBound,1)
+'		'build the error message
+'		f.intrinsic.String.Build("{0}, {1}",v.Local.spartbuild,v.Local.spart,v.Local.spartbuild)
+'	f.Intrinsic.Control.Next(v.Local.i)
+'	f.Intrinsic.String.Build("{0} - {1}","The following parts are not allowed to ship - ",v.Local.spartbuild)
+'	F.Intrinsic.UI.Msgbox(v.Local.smsg)
+'f.Intrinsic.Control.EndIf
+
+'end the program
+f.Intrinsic.Control.CallSub(unload)
+
+F.Intrinsic.Control.Label("Shipments_Err")	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: GCG_4831_HoldParts.g2u{0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}.",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+
+Program.Sub.Shipments.End
+
+Program.Sub.WOPartCheck.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+v.Local.ssql.declare
+v.Local.sret.declare
+
+'query to see if the part is on hold
+f.Intrinsic.String.Build("Select WO_HOLD from GCG_4831_PARTWF where PART = '{0}' and REV = '{1}' and LOC = '{2}' and WO_HOLD = '1'",v.Passed.000012,v.Passed.000013,v.Passed.000015,v.Local.ssql)
+F.ODBC.Connection!conx.Executeandreturn(V.Local.sSql,v.Local.sret)
+
+f.Intrinsic.Control.If(v.Local.sret,<>,"")
+	'inform the user they cannot ship that part
+	f.Intrinsic.UI.Msgbox("Part is marked on a WO Hold.")
+	v.Passed.000012.Set("")
+	v.Passed.000013.Set("")
+	v.Passed.000015.Set("")	
+	v.Passed.000016.Set("")
+	Variable.Passed.000023.Set("")
+	F.Intrinsic.UI.ChangeCallerProperty(v.Passed.000036,"LOCK", 1)
+'	v.Passed.777777.Set(1)
+F.Intrinsic.Control.Else
+	F.Intrinsic.UI.ChangeCallerProperty(v.Passed.000036,"LOCK", 0)
+f.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Label("WOPartCheck_Err")	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: GCG_4831_HoldParts.g2u{0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}.",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.WOPartCheck.End
+
+Program.Sub.GsGcParts_CellValueChanged.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+v.Local.sshipvalue.declare
+v.Local.swovalue.declare
+v.Local.ssql.declare
+v.Local.bgroup.Declare
+v.Local.sret.declare
+v.Local.scolumn.Declare
+V.Local.iDTRow.Declare(Long)
+V.Local.sKey.Declare(String)
+''check the shipment and wo hold values
+
+Gui.FormCMI.GsGcParts.GetCellValue("GVParts",0,V.Args.RowIndex,V.Local.sKey)
+F.Intrinsic.String.Build("[ECN_Number] = {0}",V.Local.sKey,V.Local.sKey)
+F.Data.DataTable.Select("dtParts",V.Local.sKey,V.Local.iDTRow)
+
+v.Local.sshipvalue.Set(v.DataTable.dtParts(v.Local.iDTRow).SHIPPING_HOLD!FIELDVALTRIM)	
+v.Local.swovalue.Set(v.DataTable.dtParts(v.Local.iDTRow).WO_HOLD!FIELDVALTRIM)
+
+v.Local.scolumn.Set(v.Args.column)
+'if they are both true, update the grid and table
+f.Intrinsic.Control.If(v.Local.scolumn,=,"WO_HOLD")
+	f.Intrinsic.Control.If(v.Local.swovalue.Trim,=,True)
+		'check to see if the user field is blank if so update the fields/table
+			f.Data.DataTable.SetValue("dtParts",v.Local.iDTRow,"THEUSER",v.caller.User)
+			f.Data.DataTable.SetValue("dtParts",v.Local.iDTRow,"DATE_TIME",v.ambient.Now)					
+			f.Intrinsic.string.Build("Update GCG_4831_PartWF SET THEUSER = '{0}', DATE_TIME = '{1}', WO_HOLD = '{3}' where ECN_NUMBER = '{2}'",v.Caller.User,v.Ambient.Now,v.DataTable.dtParts(v.Local.iDTRow).ECN_NUMBER!FIELDVALTRIM,"0",v.Local.ssql)
+			f.ODBC.Connection!conx.execute(v.Local.ssql)
+	f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.EndIf
+
+f.Intrinsic.Control.If(v.Local.scolumn,=,"SHIPPING_HOLD")
+	f.Intrinsic.Control.If(v.Local.sshipvalue.Trim,=,True)
+		'check to see if the user field is blank if so update the fields/table
+			f.Data.DataTable.SetValue("dtParts",v.Local.iDTRow,"THEUSER2",v.caller.User)
+			f.Data.DataTable.SetValue("dtParts",v.Local.iDTRow,"DATE_TIME2",v.ambient.Now)					
+			f.Intrinsic.string.Build("Update GCG_4831_PartWF SET THEUSER2 = '{0}', DATE_TIME2 = '{1}', SHIPPING_HOLD = '{3}' where ECN_NUMBER = '{2}'",v.Caller.User,v.Ambient.Now,v.DataTable.dtParts(v.Local.iDTRow).ECN_NUMBER!FIELDVALTRIM,"0",v.Local.ssql)
+			f.ODBC.Connection!conx.execute(v.Local.ssql)
+	f.Intrinsic.Control.EndIf		
+f.Intrinsic.Control.EndIf	
+	
+F.Intrinsic.Control.Label("GsGcParts_CellValueChanged_Err")	
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: GCG_4831_HoldParts.g2u{0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}.",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End 
+F.Intrinsic.Control.EndTry
+Program.Sub.GsGcParts_CellValueChanged.End
+
+Program.Sub.DirtyFlag.Start
+F.Intrinsic.Math.Add(v.Global.iDirty, 1, v.Global.iDirty)
+F.Intrinsic.UI.Sleep(1)
+Program.Sub.DirtyFlag.End
